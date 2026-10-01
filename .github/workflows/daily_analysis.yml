@@ -1,9 +1,10 @@
 name: 每日股票分析
 
 on:
-  # 定时触发 - 每天北京时间 18:00 (UTC 10:00)
+  # 定时触发 - 工作日北京时间 18:17 (UTC 10:17)
+  # 使用非整点分钟，减少 GitHub Actions 定时任务排队延迟。
   schedule:
-    - cron: '0 10 * * 1-5'  # 周一到周五，UTC 10:00 = 北京时间 18:00
+    - cron: '17 10 * * 1-5'
   
   # 手动触发
   workflow_dispatch:
@@ -11,12 +12,12 @@ on:
       mode:
         description: '运行模式'
         required: true
-        default: 'full'
+        default: 'stocks-only'
         type: choice
         options:
+          - stocks-only   # 仅股票分析
           - full          # 完整分析（股票+大盘）
           - market-only   # 仅大盘复盘
-          - stocks-only   # 仅股票分析
 
 jobs:
   analyze:
@@ -32,16 +33,32 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
       
-      - name: 安装依赖
+      - name: 安装交易日检查依赖
+        run: pip install "baostock>=0.8.0"
+
+      - name: 检查 A 股交易日
+        id: trading_day
+        if: github.event_name == 'schedule'
+        run: python .github/scripts/check_a_share_trading_day.py
+
+      - name: 非交易日说明
+        if: github.event_name == 'schedule' && steps.trading_day.outputs.is_trading_day != 'true'
+        run: |
+          echo "${{ steps.trading_day.outputs.calendar_date }} 不是 A 股交易日，跳过分析。" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: 安装项目依赖
+        if: github.event_name == 'workflow_dispatch' || steps.trading_day.outputs.is_trading_day == 'true'
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
       
       - name: 创建必要目录
+        if: github.event_name == 'workflow_dispatch' || steps.trading_day.outputs.is_trading_day == 'true'
         run: |
           mkdir -p data logs reports
       
       - name: 执行股票分析
+        if: github.event_name == 'workflow_dispatch' || steps.trading_day.outputs.is_trading_day == 'true'
         env:
           # Gemini AI
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -90,7 +107,7 @@ jobs:
           MAX_CONCURRENT: 3
         run: |
           # 判断运行模式
-          MODE="${{ github.event.inputs.mode || 'full' }}"
+          MODE="${{ github.event.inputs.mode || 'stocks-only' }}"
           
           echo "=========================================="
           echo "运行模式: $MODE"
@@ -108,7 +125,7 @@ jobs:
       
       - name: 上传分析报告
         uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && (github.event_name == 'workflow_dispatch' || steps.trading_day.outputs.is_trading_day == 'true')
         with:
           name: analysis-reports-${{ github.run_number }}
           path: |
@@ -117,7 +134,7 @@ jobs:
           retention-days: 30
       
       - name: 显示运行结果
-        if: always()
+        if: always() && (github.event_name == 'workflow_dispatch' || steps.trading_day.outputs.is_trading_day == 'true')
         run: |
           echo "=========================================="
           echo "分析完成"
