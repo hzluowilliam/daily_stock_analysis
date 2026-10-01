@@ -107,7 +107,7 @@
 
 #### 5. 完成！
 
-默认在 A 股交易日 **18:17（北京时间）** 自动执行个股分析；周末和法定休市日会自动跳过
+工作流仅在你手动点击 **Run workflow** 时运行，不会自动消耗 API 额度
 
 ### 方式二：本地运行
 
@@ -203,21 +203,9 @@ TUSHARE_TOKEN=your_token                # Tushare数据源
 SERPAPI_API_KEYS=your_serpapi_key       # 备用搜索
 ```
 
-### 定时配置（GitHub Actions）
+### 运行方式（GitHub Actions）
 
-编辑 `.github/workflows/daily_analysis.yml`:
-
-```yaml
-schedule:
-  # UTC 时间，北京时间 = UTC + 8
-  - cron: '17 10 * * 1-5'  # 工作日 18:17（北京时间），运行前检查 A 股交易日
-```
-
-| 北京时间 | UTC cron |
-|---------|----------|
-| 09:30 | `'30 1 * * 1-5'` |
-| 15:00 | `'0 7 * * 1-5'` |
-| 18:00 | `'0 10 * * 1-5'` |
+进入仓库的 `Actions` → `每日股票分析`，点击 `Run workflow`，选择分析模式后运行。
 
 ## 📁 项目结构
 
